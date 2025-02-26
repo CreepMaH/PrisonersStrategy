@@ -1,0 +1,9 @@
+services:
+  prisonersstrategy:
+    image: ${DOCKER_REGISTRY-}prisonersstrategy
+    build:
+      context: .
+      dockerfile: PrisonersStrategy/Dockerfile
+    environment:
+      - ITERATIONS_COUNT=1000
+      - PRISONERS_EVEN_COUNT=100

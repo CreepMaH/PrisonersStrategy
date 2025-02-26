@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "PrisonersStrategy": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
