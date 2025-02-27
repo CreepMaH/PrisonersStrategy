@@ -5,5 +5,6 @@ services:
       context: .
       dockerfile: PrisonersStrategy/Dockerfile
     environment:
-      - ITERATIONS_COUNT=1000
-      - PRISONERS_EVEN_COUNT=100
+      - ITERATIONS_COUNT=100000
+      - PRISONERS_EVEN_COUNT=1000
+      - IS_BENCHMARK_MODE=false
