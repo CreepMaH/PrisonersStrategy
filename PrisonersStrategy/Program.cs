@@ -1,13 +1,23 @@
-﻿namespace PrisonersStrategy
+﻿using PrisonersStrategy.Classes;
+using PrisonersStrategy.Enums;
+using PrisonersStrategy.Interfaces;
+using PrisonersStrategy.Models;
+using System.Diagnostics;
+
+namespace PrisonersStrategy
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            int iterationsCount, prisonersCount;
+            InitData initData;
             try
             {
-                ReadInitDataFromEnv(out iterationsCount, out prisonersCount);
+                IInitDataReader initDataReader = new EnvInitDataReader();
+                initData = initDataReader.Read();
+
+                Console.WriteLine($"Initial data: {initData.PrisonersCount} prisoners, {initData.IterationsCount} iterations. " +
+                    $"Is benchmark mode: {initData.ShowBenchmark}.");
             }
             catch (ArgumentException exc)
             {
@@ -16,138 +26,37 @@
                 return;
             }
 
-            Dictionary<string, Func<int, bool>> caseCalcs = new()
+            List<ISuccessRateCalc> methodsToRun = 
+            [
+                new SuccessRateCalc_Multithreaded(initData.PrisonersCount, initData.IterationsCount)
+            ];
+            if (initData.ShowBenchmark)
             {
-                {"Random",  CalcRandomCase},
-                {"Strategic", CalcStrategyCase }
-            };
-
-            foreach (var caseCalc in caseCalcs)
-            {
-                Console.WriteLine($"\r\nCalculating {caseCalc.Key} case for {iterationsCount} iterations...");
-                double successRate = CalcSuccessRate(caseCalc.Value, prisonersCount, iterationsCount);
-                Console.WriteLine($"{caseCalc.Key} case success rate is {successRate * 100:N10}%.");
+                methodsToRun.Add(new SuccessRateCalc(initData.PrisonersCount, initData.IterationsCount));
             }
+            RunCalc(methodsToRun);
         }
 
-        private static void ReadInitDataFromEnv(out int iterationsCount, out int prisonersCount)
+        private static void RunCalc(List<ISuccessRateCalc> methodsToRun)
         {
-            const string ITERATIONS_COUNT_ENV_VAR = "ITERATIONS_COUNT";
-            const string PRISONERS_EVEN_COUNT_ENV_VAR = "PRISONERS_EVEN_COUNT";
-
-            bool isIterationsCountValid = int.TryParse(Environment.GetEnvironmentVariable(ITERATIONS_COUNT_ENV_VAR),
-                out iterationsCount);
-            if (!isIterationsCountValid)
+            foreach (var calcMethod in methodsToRun)
             {
-                throw new ArgumentException("Iterations count environment variable isn't set!");
-            }
+                Stopwatch stopwatch = new();
 
-            bool isPrisonersCountValid = int.TryParse(Environment.GetEnvironmentVariable(PRISONERS_EVEN_COUNT_ENV_VAR),
-                out prisonersCount);
-            if (!isPrisonersCountValid)
-            {
-                throw new ArgumentException("Prisoners count environment variable isn't set!");
+                stopwatch.Start();
+                CalcRates(calcMethod);
+                stopwatch.Stop();
+                Console.WriteLine($"Time elapsed: {stopwatch.ElapsedMilliseconds} ms.");
             }
         }
 
-        private static double CalcSuccessRate(Func<int, bool> calcMethod, int prisonersCount, int iterationsCount)
+        private static void CalcRates(ISuccessRateCalc rateCalc)
         {
-            int successCount = 0;
-            for (int i = 0; i < iterationsCount; i++)
-            {
-                bool isSuccess = calcMethod.Invoke(prisonersCount);
-                if (isSuccess)
-                {
-                    successCount++;
-                }
-            }
-
-            return (double)successCount / iterationsCount;
+            Console.WriteLine($"Calculating with type {rateCalc.GetType()}...");
+            var successRates = rateCalc.CalcRates();
+            Console.WriteLine($"Random method: {successRates[Case.Random] * 100:N10}%, " +
+                $"strategy method: {successRates[Case.Strategy] * 100:N10}%");
         }
 
-        private static bool CalcRandomCase(int prisonersCount)
-        {
-            var boxes = GenerateBoxes(prisonersCount);
-
-            for (int i = 1; i <= prisonersCount; i++)
-            {
-                List<int> freeNums = [.. boxes.Select(b => b.Key)];
-                int attemptsRest = prisonersCount / 2;
-                bool hasFindTheNumber = false;
-
-                while(attemptsRest > 0)
-                {
-                    int randomIndex = Random.Shared.Next(freeNums.Count);
-                    bool matches = boxes[randomIndex] == i;
-                    if (matches)
-                    {
-                        hasFindTheNumber = true;
-                        break;
-                    }
-                    else
-                    {
-                        freeNums.RemoveAt(randomIndex);
-                    }
-
-                    attemptsRest--;
-                }
-
-                if (!hasFindTheNumber)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool CalcStrategyCase(int prisonersCount)
-        {
-            var boxes = GenerateBoxes(prisonersCount);
-
-            for (int i = 1; i <= prisonersCount; i++)
-            {
-                bool hasFindTheNumber = false;
-                int attemptsCount = prisonersCount / 2;
-                int currentValue = boxes[i - 1];
-
-                while (attemptsCount > 0)
-                {
-                    if (currentValue == i)
-                    {
-                        hasFindTheNumber = true;
-                        break;
-                    }
-                    else
-                    {
-                        currentValue = boxes[currentValue - 1];
-                    }
-
-                    attemptsCount--;
-                }
-
-                if (!hasFindTheNumber)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static Dictionary<int, int> GenerateBoxes(int count)
-        {
-            List<int> numbers = [.. Enumerable.Range(1, count)];
-            Dictionary<int, int> boxes = [];
-
-            for (int i = 0; i < count; i++)
-            {
-                int randomIndex = Random.Shared.Next(numbers.Count);
-                boxes.Add(i, numbers[randomIndex]);
-                numbers.RemoveAt(randomIndex);
-            }
-
-            return boxes;
-        }
     }
 }
